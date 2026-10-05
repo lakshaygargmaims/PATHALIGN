@@ -1,0 +1,49 @@
+# ============================================================
+# Render Configuration for PATHALIGN AI
+# Deploy this repo to Render using the web dashboard:
+# https://dashboard.render.com/new/git?repo=https://github.com/lakshaygargmaims/PATHALIGN
+# ============================================================
+services:
+  - type: web
+    name: pathalign-ai
+    env: node
+    runtime: node
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        value: $DATABASE_URL
+      - key: DATABASE_URL_UNPOOLED
+        value: $DATABASE_URL_UNPOOLED
+      - key: SESSION_COOKIE_NAME
+        value: pathalign_session
+      - key: SESSION_TTL_HOURS
+        value: "72"
+      - key: AUTH_SECRET
+        value: $AUTH_SECRET
+      - key: AI_PROVIDER
+        value: $AI_PROVIDER
+      - key: OPENAI_API_KEY
+        value: $OPENAI_API_KEY
+      - key: OPENAI_BASE_URL
+        value: $OPENAI_BASE_URL
+      - key: OPENAI_CHAT_MODEL
+        value: $OPENAI_CHAT_MODEL
+      - key: OPENAI_EMBEDDING_MODEL
+        value: $OPENAI_EMBEDDING_MODEL
+      - key: RAG_MODE
+        value: $RAG_MODE
+      - key: ENABLE_VECTOR_SEARCH
+        value: $ENABLE_VECTOR_SEARCH
+      - key: NEXT_PUBLIC_APP_URL
+        value: $NEXT_PUBLIC_APP_URL
+      - key: RATE_LIMIT_MAX
+        value: $RATE_LIMIT_MAX
+      - key: RATE_LIMIT_WINDOW_MS
+        value: $RATE_LIMIT_WINDOW_MS
+      - key: STORAGE_DIR
+        value: $STORAGE_DIR
+    regions:
+      - oregon
+    autoDeploy: true
+    healthCheckPath: /api/health
