@@ -1,0 +1,1050 @@
+// ============================================================
+// PATHALIGN AI — Prisma schema (PostgreSQL + pgvector)
+// Normalized schema for family-based vocational career counselling.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// Enums
+// ------------------------------------------------------------
+
+enum Role {
+  STUDENT
+  PARENT
+  COUNSELLOR
+  ADMIN
+}
+
+enum AppLanguage {
+  EN
+  HI
+}
+
+enum FamilyRelation {
+  STUDENT
+  PARENT
+  GUARDIAN
+}
+
+enum AreaType {
+  URBAN
+  SEMI_URBAN
+  RURAL
+}
+
+enum VerificationStatus {
+  VERIFIED
+  PENDING_VERIFICATION
+  OUTDATED
+  UNAVAILABLE
+  SYNTHETIC_DEMO
+}
+
+enum EmploymentType {
+  GOVERNMENT
+  PRIVATE
+  SELF_EMPLOYMENT
+  APPRENTICESHIP
+  FREELANCE
+  FAMILY_BUSINESS
+}
+
+enum ConcernCategory {
+  LOW_SALARY
+  JOB_SECURITY
+  SOCIAL_STATUS
+  SAFETY
+  TRADITIONAL_DEGREE
+  FURTHER_EDUCATION
+  FINANCIAL_LIMITATION
+  LACK_OF_AWARENESS
+  FAMILY_PRESSURE
+  OTHER
+}
+
+enum ConcernStatus {
+  OPEN
+  ADDRESSED
+  CLOSED
+}
+
+enum ConcernSource {
+  CHAT
+  FORM
+  ASSESSMENT
+  CONSENSUS
+}
+
+enum CaseStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum CasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentMode {
+  VIDEO
+  PHONE
+  IN_PERSON
+}
+
+enum ConsensusStatus {
+  OPEN
+  AGREED
+  PARTIALLY_AGREED
+  NEEDS_DISCUSSION
+  COUNSELLOR_REQUESTED
+}
+
+enum ConfidencePhase {
+  PRE
+  POST
+}
+
+enum AssessmentKind {
+  STUDENT_INTEREST
+  PARENT_EXPECTATIONS
+  FAMILY_CONTEXT
+  CONFIDENCE_PRE
+  CONFIDENCE_POST
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ConversationKind {
+  OBJECTION_ANALYZER
+  GENERAL_COUNSELLING
+  DIGITAL_TWIN
+  MYTH_FOLLOWUP
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ESCALATED
+  ARCHIVED
+}
+
+enum RecommendationPathway {
+  PREFERRED
+  ALTERNATIVE
+  LONG_TERM_GROWTH
+}
+
+enum RecommendationStatus {
+  PROPOSED
+  REVIEWED
+  ACCEPTED
+  DECLINED
+}
+
+enum ReportType {
+  FAMILY_AGREEMENT
+  COUNSELLING_SUMMARY
+  CAREER_ANALYSIS
+}
+
+enum ReportStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+enum ProviderType {
+  ITI
+  PRIVATE_ITI
+  POLYTECHNIC
+  COMMUNITY_SKILL_CENTRE
+  NSDC_PARTNER
+  APPRENTICESHIP_TRAINING_PROVIDER
+  ONLINE
+}
+
+enum EmploymentSector {
+  GOVERNMENT
+  PRIVATE_MANUFACTURING
+  PRIVATE_SERVICES
+  IT_SOFTWARE
+  HEALTHCARE
+  CONSTRUCTION
+  RETAIL
+  ENTREPRENEURSHIP
+  FREELANCE
+  OTHER
+}
+
+enum DataSourceCategory {
+  GOVERNMENT
+  OFFICIAL_BODY
+  PSU
+  NGO
+  ACADEMIC
+  COMMERCIAL
+  INTERNAL_DEMO
+}
+
+enum ImportStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  CASE_UPDATE
+  APPOINTMENT
+  CONSENSUS
+  REPORT_READY
+  SYSTEM
+  CONCERN_RESPONSE
+}
+
+enum ConsentKind {
+  FAMILY_PROFILE_SHARING
+  CONVERSATION_SHARING_TO_COUNSELLOR
+  GUARDIAN_CONSENT_MINOR
+  DATA_ANALYTICS_AGGREGATE
+}
+
+// ------------------------------------------------------------
+// Identity, auth, families
+// ------------------------------------------------------------
+
+model User {
+  id                String       @id @default(cuid())
+  fullName          String
+  email             String       @unique
+  mobile            String?
+  passwordHash      String
+  role              Role
+  state             String?
+  district          String?
+  preferredLanguage AppLanguage  @default(EN)
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  sessions          Session[]
+  familyMemberships FamilyMember[]
+  studentProfile     StudentProfile?
+  parentProfile      ParentProfile?
+  authoredConcerns   ParentConcern[]     @relation("ConcernAuthor")
+  conversations      ChatConversation[]
+  careerInterests    CareerInterest[]
+  assessments        CareerAssessment[]
+  recommendations    CareerRecommendation[]
+  counsellorProfile  Counsellor?
+  raisedCases        CounsellorCase[]    @relation("CaseOwner")
+  caseNotes          CaseNote[]
+  appointmentsMade   Appointment[]       @relation("AppointmentCreator")
+  reports            CareerReport[]
+  feedback           Feedback[]
+  notifications      Notification[]
+  auditLogs          AdminAuditLog[]
+  consentsGiven      ConsentRecord[]     @relation("ConsentUser")
+  dataSourcesAdded   DataSource[]
+  importsUploaded    ImportBatch[]       @relation("ImportUploader")
+  importReviewed     ImportBatch[]       @relation("ImportReviewer")
+  verificationsDone  DataVerification[]  @relation("Verifier")
+
+  @@index([role])
+  @@index([state, district])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  userAgent  String?
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Family {
+  id                String        @id @default(cuid())
+  familyCode        String        @unique
+  name              String?
+  state             String?
+  district          String?
+  areaType          AreaType?
+  incomeBracket     String?
+  preferredLanguage AppLanguage   @default(EN)
+  createdByUserId   String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  members              FamilyMember[]
+  studentProfile       StudentProfile?
+  parentProfile        ParentProfile?
+  assessments          CareerAssessment[]
+  concerns             ParentConcern[]
+  counsellingSessions  CounsellingSession[]
+  conversations        ChatConversation[]
+  recommendations      CareerRecommendation[]
+  consensuses          FamilyConsensus[]
+  confidenceScores     ConfidenceAssessment[]
+  cases                CounsellorCase[]
+  appointments         Appointment[]
+  reports              CareerReport[]
+  consents             ConsentRecord[]
+
+  @@index([state, district])
+}
+
+model FamilyMember {
+  id             String         @id @default(cuid())
+  familyId       String
+  userId         String
+  relation       FamilyRelation
+  isMinor        Boolean        @default(false)
+  consentGranted Boolean        @default(false)
+  consentAt      DateTime?
+  joinedAt       DateTime       @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+}
+
+model ConsentRecord {
+  id         String       @id @default(cuid())
+  userId     String
+  familyId   String?
+  kind       ConsentKind
+  granted    Boolean
+  note       String?
+  grantedAt  DateTime     @default(now())
+  revokedAt  DateTime?
+
+  user   User    @relation("ConsentUser", fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([familyId])
+}
+
+// ------------------------------------------------------------
+// Profiles & assessments
+// ------------------------------------------------------------
+
+model StudentProfile {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  familyId            String?   @unique
+  age                 Int?
+  qualification       String?
+  academicBackground  String?
+  interests           String[]  @default([])
+  skills              String[]  @default([])
+  preferredCareerAreas String[] @default([])
+  location            String?
+  aspirations         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+}
+
+model ParentProfile {
+  id                   String         @id @default(cuid())
+  userId               String         @unique
+  familyId             String?        @unique
+  educationBackground  String?
+  careerExpectations   String?
+  financialConcerns    String?
+  preferredEmploymentType EmploymentType?
+  careerConcerns       String[]       @default([])
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+}
+
+model CareerAssessment {
+  id          String         @id @default(cuid())
+  userId      String
+  familyId    String?
+  kind        AssessmentKind
+  answers     Json
+  scores      Json?
+  summary     String?
+  completedAt DateTime?      @default(now())
+  createdAt   DateTime       @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind])
+  @@index([familyId])
+}
+
+model CareerInterest {
+  id        String   @id @default(cuid())
+  userId    String
+  tradeId   String?
+  label     String
+  rank      Int      @default(1)
+  source    String   @default("SELF")
+  createdAt DateTime @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trade CareerTrade? @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+model ParentConcern {
+  id             String          @id @default(cuid())
+  authorUserId   String
+  familyId       String?
+  category       ConcernCategory
+  detail         String
+  language       AppLanguage     @default(EN)
+  sentimentScore Float?
+  status         ConcernStatus   @default(OPEN)
+  source         ConcernSource   @default(FORM)
+  state          String?
+  district       String?
+  resolvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  author User    @relation("ConcernAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([category, status])
+  @@index([familyId])
+  @@index([state, district])
+}
+
+// ------------------------------------------------------------
+// Counselling, chat, escalation
+// ------------------------------------------------------------
+
+model CounsellingSession {
+  id          String   @id @default(cuid())
+  familyId    String?
+  caseId      String?
+  counsellorId String?
+  kind        String   @default("AI") // AI | HUMAN
+  title       String
+  scheduledAt DateTime?
+  durationMin Int?
+  status      String   @default("COMPLETED")
+  summary     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  family   Family?   @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  case     CounsellorCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  counsellor Counsellor?   @relation(fields: [counsellorId], references: [id], onDelete: SetNull)
+
+  @@index([familyId])
+  @@index([counsellorId])
+}
+
+model ChatConversation {
+  id             String             @id @default(cuid())
+  userId         String
+  familyId       String?
+  kind           ConversationKind   @default(OBJECTION_ANALYZER)
+  title          String             @default("New conversation")
+  language       AppLanguage        @default(EN)
+  summary        String?
+  sentimentLabel String?
+  concernCategory ConcernCategory?
+  status         ConversationStatus @default(ACTIVE)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family   Family?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+  feedback Feedback[]
+  cases    CounsellorCase[]
+
+  @@index([userId, updatedAt])
+  @@index([familyId])
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  language       AppLanguage?
+  intent         String?
+  concernCategory ConcernCategory?
+  sentiment      String?
+  sources        Json?
+  createdAt      DateTime     @default(now())
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Counsellor {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  designation   String?
+  specialities  String[] @default([])
+  states        String[] @default([])
+  districts     String[] @default([])
+  maxActiveCases Int     @default(20)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cases    CounsellorCase[]
+  sessions CounsellingSession[]
+  appointments Appointment[]
+
+  @@index([isActive])
+}
+
+model CounsellorCase {
+  id             String       @id @default(cuid())
+  ownerId        String
+  familyId       String?
+  counsellorId   String?
+  conversationId String?
+  category       ConcernCategory
+  subject        String
+  description    String
+  status         CaseStatus   @default(PENDING)
+  priority       CasePriority @default(NORMAL)
+  summaryShared  Boolean      @default(false)
+  source         String       @default("AI_ESCALATION")
+  assignedAt     DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  owner        User              @relation("CaseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  family       Family?           @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  counsellor   Counsellor?       @relation(fields: [counsellorId], references: [id], onDelete: SetNull)
+  conversation ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  notes        CaseNote[]
+  sessions     CounsellingSession[]
+  appointments Appointment[]
+
+  @@index([status, priority])
+  @@index([counsellorId, status])
+  @@index([familyId])
+}
+
+model CaseNote {
+  id        String   @id @default(cuid())
+  caseId    String
+  authorId  String
+  note      String
+  createdAt DateTime @default(now())
+
+  case   CounsellorCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  caseId      String?
+  familyId    String?
+  counsellorId String
+  createdById String
+  scheduledAt DateTime
+  durationMin Int               @default(30)
+  mode        AppointmentMode   @default(PHONE)
+  status      AppointmentStatus @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  case       CounsellorCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  family     Family?         @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  counsellor Counsellor      @relation(fields: [counsellorId], references: [id], onDelete: Cascade)
+  createdBy  User            @relation("AppointmentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([counsellorId, scheduledAt])
+  @@index([familyId])
+}
+
+model Feedback {
+  id             String   @id @default(cuid())
+  userId         String
+  conversationId String?
+  caseId         String?
+  rating         Int
+  category       String?
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([rating])
+  @@index([userId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType @default(SYSTEM)
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+// ------------------------------------------------------------
+// Career knowledge base
+// ------------------------------------------------------------
+
+model DataSource {
+  id                String             @id @default(cuid())
+  name              String
+  url               String?
+  publisher         String?
+  category          DataSourceCategory
+  description       String?
+  geographicScope   String?
+  publishedAt       DateTime?
+  isSynthetic       Boolean            @default(false)
+  verificationStatus VerificationStatus @default(PENDING_VERIFICATION)
+  lastVerifiedAt    DateTime?
+  addedById         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  addedBy        User?              @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  trades         CareerTrade[]
+  qualifications  Qualification[]
+  providers       TrainingProvider[]
+  salaryStats     SalaryStatistic[]
+  placementStats  PlacementStatistic[]
+  opportunities   EmploymentOpportunity[]
+  knowledgeDocs   KnowledgeDocument[]
+  verifications   DataVerification[]
+
+  @@index([verificationStatus])
+  @@index([category])
+}
+
+model DataVerification {
+  id         String             @id @default(cuid())
+  sourceId   String?
+  recordType String
+  recordId   String?
+  status     VerificationStatus
+  notes      String?
+  verifiedById String?
+  checkedAt  DateTime           @default(now())
+
+  source     DataSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  verifiedBy User?       @relation("Verifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([recordType, recordId])
+  @@index([status])
+}
+
+model Qualification {
+  id                String             @id @default(cuid())
+  code              String             @unique
+  title             String
+  nsqfLevel         Int?
+  description       String?
+  equivalence       String?
+  progressionNote   String?
+  sourceId          String?
+  verificationStatus VerificationStatus @default(PENDING_VERIFICATION)
+  lastVerifiedAt    DateTime?
+  createdAt         DateTime           @default(now())
+
+  source DataSource?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  trades CareerTrade[]
+}
+
+model CareerTrade {
+  id                String             @id @default(cuid())
+  name              String
+  slug              String             @unique
+  category          String
+  ncoCode           String?
+  description       String
+  durationMonths    Int
+  nsqfLevel         Int?
+  eligibility       String?
+  qualificationId   String?
+  feeMin            Int?
+  feeMax            Int?
+  isSynthetic       Boolean            @default(true)
+  status            String             @default("ACTIVE")
+  sourceId          String?
+  verificationStatus VerificationStatus @default(SYNTHETIC_DEMO)
+  lastVerifiedAt    DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  qualification Qualification?        @relation(fields: [qualificationId], references: [id], onDelete: SetNull)
+  source        DataSource?           @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  salaryStats   SalaryStatistic[]
+  placementStats PlacementStatistic[]
+  pathways      CareerPathway[]
+  opportunities EmploymentOpportunity[]
+  interests     CareerInterest[]
+  knowledgeDocs KnowledgeDocument[]
+  recommendations CareerRecommendation[]
+  courses       ProviderCourse[]
+
+  @@index([category])
+  @@index([verificationStatus])
+}
+
+model CareerPathway {
+  id          String   @id @default(cuid())
+  tradeId     String
+  title       String
+  description String?
+  isDefault   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  trade  CareerTrade         @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  stages CareerPathwayStage[]
+
+  @@index([tradeId])
+}
+
+model CareerPathwayStage {
+  id           String   @id @default(cuid())
+  pathwayId    String
+  order        Int
+  title        String
+  description  String
+  qualification String?
+  nsqfLevel    Int?
+  experienceYears Int?
+  salaryRange  String?
+  skills       String[] @default([])
+  certifications String[] @default([])
+  employmentSectors String[] @default([])
+  furtherEducation String?
+
+  pathway CareerPathway @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+
+  @@index([pathwayId, order])
+}
+
+model SalaryStatistic {
+  id              String             @id @default(cuid())
+  tradeId         String
+  experienceLevel String // ENTRY | MID | SENIOR
+  monthlyMin      Int
+  monthlyMax      Int
+  currency        String             @default("INR")
+  geography       String?
+  periodYear      Int?
+  isEstimate      Boolean            @default(true)
+  notes           String?
+  sourceId        String?
+  verificationStatus VerificationStatus @default(SYNTHETIC_DEMO)
+  lastVerifiedAt  DateTime?
+  createdAt       DateTime           @default(now())
+
+  trade  CareerTrade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  source DataSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([tradeId, experienceLevel])
+}
+
+model PlacementStatistic {
+  id              String             @id @default(cuid())
+  tradeId         String
+  providerId      String?
+  periodYear      Int
+  placedCount     Int
+  totalGraduates  Int
+  placementRate   Float?
+  notes           String?
+  sourceId        String?
+  verificationStatus VerificationStatus @default(SYNTHETIC_DEMO)
+  lastVerifiedAt  DateTime?
+  createdAt       DateTime           @default(now())
+
+  trade    CareerTrade       @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  provider TrainingProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  source   DataSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([tradeId, periodYear])
+}
+
+model TrainingProvider {
+  id                String             @id @default(cuid())
+  name              String
+  type              ProviderType
+  state             String
+  district          String
+  city              String?
+  pinCode           String?
+  lat               Float?
+  lng               Float?
+  website           String?
+  affiliation       String?
+  isSynthetic       Boolean            @default(true)
+  sourceId          String?
+  verificationStatus VerificationStatus @default(SYNTHETIC_DEMO)
+  lastVerifiedAt    DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  source   DataSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  courses  ProviderCourse[]
+  placements PlacementStatistic[]
+
+  @@index([state, district])
+  @@index([type])
+}
+
+model ProviderCourse {
+  id             String   @id @default(cuid())
+  providerId     String
+  tradeId        String
+  durationMonths Int
+  feeMin         Int?
+  feeMax         Int?
+  eligibility    String?
+  seats          Int?
+  createdAt      DateTime @default(now())
+
+  provider TrainingProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  trade    CareerTrade      @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, tradeId])
+  @@index([tradeId])
+}
+
+model EmploymentOpportunity {
+  id             String             @id @default(cuid())
+  tradeId        String?
+  title          String
+  sector         EmploymentSector
+  employmentType EmploymentType
+  state          String?
+  district       String?
+  employerName   String?
+  isVacancy      Boolean            @default(false)
+  description    String
+  openPositions  Int?
+  sourceUrl      String?
+  postedAt       DateTime?
+  expiresAt      DateTime?
+  isSynthetic    Boolean            @default(true)
+  sourceId       String?
+  verificationStatus VerificationStatus @default(SYNTHETIC_DEMO)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime           @default(now())
+
+  trade  CareerTrade? @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+  source DataSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([state, district])
+  @@index([isVacancy])
+  @@index([tradeId])
+}
+
+model KnowledgeDocument {
+  id                String             @id @default(cuid())
+  title             String
+  chunk             String
+  docType           String // TRADE_INFO | MYTH_FACT | SCHEME | PATHWAY | FAQ | PROGRESSION
+  language          AppLanguage        @default(EN)
+  tags              String[]           @default([])
+  tradeId           String?
+  sourceId          String?
+  verificationStatus VerificationStatus @default(PENDING_VERIFICATION)
+  lastVerifiedAt    DateTime?
+  publishedAt       DateTime?
+  // pgvector embedding (populated when ENABLE_VECTOR_SEARCH=true and embeddings configured)
+  embedding         Unsupported("vector(1536)")?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  trade  CareerTrade? @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+  source DataSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([docType, language])
+  @@index([tradeId])
+}
+
+// ------------------------------------------------------------
+// Signature feature records
+// ------------------------------------------------------------
+
+model CareerRecommendation {
+  id          String               @id @default(cuid())
+  userId      String
+  familyId    String?
+  tradeId     String?
+  pathway     RecommendationPathway
+  rank        Int
+  title       String
+  rationale   String
+  matchScore  Int?
+  evidence    Json?
+  status      RecommendationStatus @default(PROPOSED)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  trade  CareerTrade?  @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, pathway])
+  @@index([userId])
+}
+
+model FamilyConsensus {
+  id              String          @id @default(cuid())
+  familyId        String
+  status          ConsensusStatus @default(OPEN)
+  studentPicks    Json
+  parentPicks     Json
+  common          Json
+  disagreements   Json
+  concerns        Json
+  recommendations Json
+  evidence        Json
+  studentDecision String?
+  parentDecision  String?
+  aiSummary       String?
+  reportId        String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, status])
+}
+
+model ConfidenceAssessment {
+  id           String          @id @default(cuid())
+  familyId     String
+  phase        ConfidencePhase
+  userId       String?
+  answers      Json
+  dimensions   Json
+  overallScore Int
+  createdAt    DateTime        @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, phase])
+}
+
+// ------------------------------------------------------------
+// Reports, admin, imports
+// ------------------------------------------------------------
+
+model CareerReport {
+  id        String       @id @default(cuid())
+  userId    String
+  familyId  String?
+  type      ReportType
+  language  AppLanguage  @default(EN)
+  status    ReportStatus @default(READY)
+  filePath  String?
+  payload   Json
+  createdAt DateTime     @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([familyId])
+}
+
+model ImportBatch {
+  id           String       @id @default(cuid())
+  filename     String
+  recordType   String
+  status       ImportStatus @default(PENDING_REVIEW)
+  rowCount     Int          @default(0)
+  acceptedRows Int          @default(0)
+  payload      Json?
+  notes        String?
+  uploadedById String
+  reviewedById String?
+  createdAt    DateTime     @default(now())
+  reviewedAt   DateTime?
+
+  uploadedBy User  @relation("ImportUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ImportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}

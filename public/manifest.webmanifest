@@ -1,0 +1,16 @@
+{
+  "name": "PATHALIGN AI — Aligning Dreams with Opportunities",
+  "short_name": "PATHALIGN AI",
+  "description": "AI-powered vocational career counselling and family decision support.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#102B46",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
