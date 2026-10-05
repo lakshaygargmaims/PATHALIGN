@@ -39,3 +39,8 @@ prisma/*.db
 
 # tests
 coverage
+
+.vercel
+
+# vercel deploy logs
+vercel-deploy*.json
